@@ -1,10 +1,17 @@
+"""
+Synthesizer in FN2 framework
+"""
+
 from typing import List
+from trace import Trace
 from llm_synthesizer import LLMSynthesizer
 from board import Task, Board, TaskStatus, Action, TaskResult
 from dryrun import DryRun
-from trace import Trace
 
 class Synthesizer:
+    """
+    Synthesizer combines action results and provides the final answer.
+    """
     board: Board
     llm_synthesizer: LLMSynthesizer
     dryrun: DryRun
@@ -15,14 +22,20 @@ class Synthesizer:
         self.llm_synthesizer = LLMSynthesizer()
 
     async def synthesize(self, request: str, actions: List[Action]) -> TaskResult:
+        """
+        Synthesize for the final answer.
+        """
         if self.dryrun:
             return await self.dryrun.synthesize(request, actions)
         else:
             return await self.llm_synthesizer.synthesize(actions)
 
     async def on_event(self, task: Task):
+        """
+        Event process, start to synthesize task if it was executed.
+        """
         Trace.log("Synthesizer", f"notify: {task.task_id} goal={task.goal}, status={task.status}")
         if task.status == TaskStatus.EXED:
             final = await self.synthesize(task.goal, task.actions)
             Trace.log("Synthesizer", f"task {task.task_id} synthesize result={final}")
-            await self.board.synthesis_task(task.task_id, final)
+            await self.board.synthesize_task(task.task_id, final)

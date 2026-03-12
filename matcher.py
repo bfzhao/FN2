@@ -1,29 +1,30 @@
-from openai import OpenAI  # Using compatible interface to call ollama
+"""
+Matcher 
+"""
 import json
 import subprocess
 import os
 import re
-from typing import Dict, Any, List, Tuple
-from config import llm
-from matcher_prompt import MATCHER_PROMPT
-from matcher_veridy_prompt import VERIFY_PROMPT
 from trace import Trace
+from typing import Dict, Any, List, Tuple
+from llm_wrapper import LLMWrapper
+import llm_wrapper
+from matcher_prompt import MATCHER_PROMPT
+from matcher_verify_prompt import VERIFY_PROMPT
 from board import Action
 
 SKILLS_DIR = os.path.join(".trae", "skills")
 MAX_ITERATIONS = 3
 ERROR_THRESHOLD = 0.15
-client = OpenAI(base_url=llm["base_url"], api_key=llm["api_key"])
-model = llm["model"]
 
 def load_skills(skills_dir: str = None) -> Dict[str, Dict]:
     if skills_dir is None:
         skills_dir = SKILLS_DIR
-    
+
     skills = {}
     if not os.path.exists(skills_dir):
         return skills
-    
+
     for skill_name in os.listdir(skills_dir):
         skill_path = os.path.join(skills_dir, skill_name)
         if os.path.isdir(skill_path):
@@ -65,7 +66,7 @@ def load_skills(skills_dir: str = None) -> Dict[str, Dict]:
                                     }
                 except Exception as e:
                     print(f"Failed to load skill {skill_name}: {e}")
-    
+
     return skills
 
 def calculator(expression: str) -> float:
@@ -90,19 +91,20 @@ def shell_exec(command: str) -> str:
         "> /", ">> /", ">", ">>",
         ":(){:|:&};:", "fork bomb"
     ]
-    
+
     command_lower = command.lower().strip()
-    
+
     for pattern in dangerous_patterns:
         if pattern.lower() in command_lower:
             return f"❌ Command execution rejected: {command}\nReason: Contains dangerous operation '{pattern}'"
-    
+
     try:
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
+            check=False,
             timeout=30
         )
         output = []
@@ -151,13 +153,14 @@ def execute_skill_command(command: str, params: Dict = None) -> str:
     if params:
         for key, value in params.items():
             command = command.replace(f"<{key}>", str(value))
-    
+
     try:
         result = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
+            check=False,
             timeout=30
         )
         output = f"Command: {command}\n"
@@ -176,39 +179,45 @@ def execute_skill_call(skill_call: Dict) -> List[str]:
     """Execute single skill call"""
     skill_name = skill_call.get("skill")
     params = skill_call.get("params", {})
-    
+
     if skill_name not in SKILLS:
         return [f"Unknown skill: {skill_name}"]
-    
+
     skill_info = SKILLS[skill_name]
     skill_commands = skill_info.get("commands", [])
-    
+
     if not skill_commands:
         return [f"Skill '{skill_name}' has no predefined commands"]
-    
+
     results = []
     for cmd in skill_commands:
         result = execute_skill_command(cmd, params)
         results.append(result)
-    
+
     return results
+
+MAX_ITERATIONS = 3
 
 class Matcher:
     def __init__(self, step: Action):
+        self.llm_wrapper = LLMWrapper()
         self.state = {"history": []}
         self.goal = step.operation
         self.plan = None
         self.try_count = 0
 
     def run(self):
-        MAX_ITERATIONS = 3
         Trace.log("Matcher", f"Start matching plan, goal: {self.goal}, try_count: {self.try_count}")
         while self.try_count < MAX_ITERATIONS:
-            if self._run():
-                break
+            success, final_answer = self._run()
+            if success:
+                return success, final_answer
 
             self.try_count += 1
             self.plan = self.match()
+
+        Trace.log("Matcher", f"Failed to match plan after {MAX_ITERATIONS} attempts")
+        return False, None
 
     def _run(self):
         print(self.plan)
@@ -234,12 +243,12 @@ class Matcher:
                     if not any(sr.startswith("Skill") for sr in skill_results):
                         print(f"  {r[:200]}...")
                 Trace.log("Matcher", f"Final answer: {self.plan["final_answer"]}")
-                
+
                 # Update observation with real execution results
                 real_results_str = "\n".join(skill_results + results)
                 updated_error = self._validate_final_answer(real_results_str, self.plan["final_answer"])
                 Trace.log("Matcher", f"Error score based on real results: {updated_error:.3f}")
-                
+
                 if updated_error <= ERROR_THRESHOLD:
                     Trace.log("Matcher", "Converged! Task completed.")
                     return True, self.plan["final_answer"]
@@ -249,15 +258,15 @@ class Matcher:
                 Trace.log("Matcher", "Warning: Attempting to return final answer without executing any tools or skills")
         else:
             Trace.log("Matcher:", json.dumps(self.plan, indent=2, ensure_ascii=False))
-        
-        return False, None, None
+
+        return False, None
 
     def match(self, feedback: str = "") -> Dict:
         available_tools = "\n".join([
             f"- {name}: {info['description']}"
             for name, info in TOOLS.items()
         ])
-        
+
         available_skills = "\n".join([
             f"- {name}: {info['description']}"
             for name, info in SKILLS.items()
@@ -269,23 +278,17 @@ class Matcher:
             available_skills=available_skills,
             observation=observation
         )
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": prompt
-                },
-                {
-                    "role": "user",
-                    "content": self.goal
-                }
-            ],
+
+        content = self.llm_wrapper.generate(
+            prompt=prompt,
+            question=self.goal,
             temperature=0.3
         )
 
-        json_str = response.choices[0].message.content.strip()
-        if json_str.startswith("```json"): json_str = json_str[7:-3].strip()
+        json_str = content.strip()
+        if json_str.startswith("```json"):
+            json_str = json_str[7:-3].strip()
+
         print(json_str)
         try:
             plan = json.loads(json_str)
@@ -305,15 +308,13 @@ class Matcher:
             final_answer=final_answer
         )
 
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
+        score_text = self.llm_wrapper.generate(
+            prompt="",
+            question=prompt,
             temperature=0.1,
             max_tokens=4096
         )
         try:
-            Trace.log("Matcher", f"Validator raw output: {response.choices[0]}")
-            score_text = response.choices[0].message.content.strip()
             match = re.search(r'\d+\.\d+', score_text)
             if match:
                 score = float(match.group())
@@ -328,13 +329,13 @@ class Matcher:
     def _execute_plan(self, plan: Dict) -> Tuple[List[str], List[str]]:
         tool_results = []
         skill_results = []
-        
+
         for cmd in plan.get("tool_calls", []):
             result = execute_tool_call(cmd)
             tool_results.append(result)
-        
+
         for cmd in plan.get("skill_calls", []):
             results = execute_skill_call(cmd)
             skill_results.extend(results)
-        
+
         return tool_results, skill_results

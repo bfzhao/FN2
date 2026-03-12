@@ -6,7 +6,7 @@ def get_success_scenario():
     """Normal success test scenario"""
     return Scenario(
         name="success_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -36,7 +36,7 @@ def get_failure_scenario():
     """Step failure test scenario"""
     return Scenario(
         name="failure_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -67,19 +67,19 @@ def get_nested_scenario():
     """Nested subtask test scenario"""
     return Scenario(
         name="nested_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="parent_step",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(
                                 atom=False,
                                 operation="child_step",
-                                taskDef=TaskDef(
+                                task_def=TaskDef(
                                     inquery=None,
                                     steps=[
                                         dict(
@@ -127,7 +127,7 @@ def get_retry_scenario():
         runtime_config=RuntimeConfig(
             config={"auto_retry_tasks": False}  # Disable auto retry
         ),
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -150,7 +150,7 @@ def get_inquery_scenario():
     """User input required test scenario"""
     return Scenario(
         name="inquery_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=dict(
                 enable=True,
                 prompt=[
@@ -177,7 +177,7 @@ def get_cancel_scenario():
     """User cancel task test scenario"""
     return Scenario(
         name="cancel_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=dict(
                 enable=True,
                 prompt=[
@@ -202,43 +202,43 @@ def get_depth_limit_scenario():
     """Depth limit test scenario - should escalate as capability limit when exceeding max depth"""
     return Scenario(
         name="depth_limit_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="level1",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(
                                 atom=False,
                                 operation="level2",
-                                taskDef=TaskDef(
+                                task_def=TaskDef(
                                     inquery=None,
                                     steps=[
                                         dict(
                                             atom=False,
                                             operation="level3",
-                                            taskDef=TaskDef(
+                                            task_def=TaskDef(
                                                 inquery=None,
                                                 steps=[
                                                     dict(
                                                         atom=False,
                                                         operation="level4",
-                                                        taskDef=TaskDef(
+                                                        task_def=TaskDef(
                                                             inquery=None,
                                                             steps=[
                                                                 dict(
                                                                     atom=False,
                                                                     operation="level5",
-                                                                    taskDef=TaskDef(
+                                                                    task_def=TaskDef(
                                                                         inquery=None,
                                                                         steps=[
                                                                             dict(
                                                                                 atom=False,
                                                                                 operation="level6",
-                                                                                taskDef=TaskDef(
+                                                                                task_def=TaskDef(
                                                                                     inquery=None,
                                                                                     steps=[
                                                                                         dict(
@@ -275,7 +275,7 @@ def get_depth_limit_scenario():
 def get_subtask_fail_scenario():
     return Scenario(
         name="subtask_fail_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -286,7 +286,7 @@ def get_subtask_fail_scenario():
                 dict(
                     atom=False,
                     operation="process_data",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=dict(
                             enable=True,  # 子任务生成 inquery
                             prompt=[
@@ -321,7 +321,7 @@ def get_subtask_fail_scenario():
 def get_synthesize_scenario():
     return Scenario(
         name="synthesize_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -352,13 +352,13 @@ def get_synthesize_scenario():
 def get_multiple_children_scenario():
     return Scenario(
         name="multiple_children_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="child1",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(atom=True, operation="child1_step1", success=True),
@@ -368,7 +368,7 @@ def get_multiple_children_scenario():
                 dict(
                     atom=False,
                     operation="child2",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(atom=True, operation="child2_step1", success=True),
@@ -378,7 +378,7 @@ def get_multiple_children_scenario():
                 dict(
                     atom=False,
                     operation="child3",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(atom=True, operation="child3_step1", success=True),
@@ -402,13 +402,13 @@ def get_multiple_children_scenario():
 def get_mixed_children_scenario():
     return Scenario(
         name="mixed_children_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="success_child",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(atom=True, operation="success_step", success=True),
@@ -418,7 +418,7 @@ def get_mixed_children_scenario():
                 dict(
                     atom=False,
                     operation="fail_child",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=None,
                         steps=[
                             dict(atom=True, operation="fail_step", success=False, error="Child failed"),
@@ -440,7 +440,7 @@ def get_mixed_children_scenario():
 def get_empty_steps_scenario():
     return Scenario(
         name="empty_steps_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[]
         ),
@@ -453,7 +453,7 @@ def get_empty_steps_scenario():
 def get_single_step_scenario():
     return Scenario(
         name="single_step_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(atom=True, operation="only_step", success=True)
@@ -468,7 +468,7 @@ def get_single_step_scenario():
 def get_auto_retry_disabled_scenario():
     return Scenario(
         name="auto_retry_disabled_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -497,7 +497,7 @@ def get_auto_retry_disabled_scenario():
 def get_auto_retry_enabled_scenario():
     return Scenario(
         name="auto_retry_enabled_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
@@ -526,13 +526,13 @@ def get_auto_retry_enabled_scenario():
 def get_auto_fail_disabled_scenario():
     return Scenario(
         name="auto_fail_disabled_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="system_task",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=dict(
                             enable=True,
                             prompt=[
@@ -561,13 +561,13 @@ def get_auto_fail_disabled_scenario():
 def get_auto_fail_enabled_scenario():
     return Scenario(
         name="auto_fail_enabled_test",
-        taskDef=TaskDef(
+        task_def=TaskDef(
             inquery=None,
             steps=[
                 dict(
                     atom=False,
                     operation="system_task",
-                    taskDef=TaskDef(
+                    task_def=TaskDef(
                         inquery=dict(
                             enable=True,
                             prompt=[

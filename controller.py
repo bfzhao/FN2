@@ -1,9 +1,16 @@
-from typing import Dict, Any
+"""
+Controller in FN2 framework.
+"""
+from typing import Dict
+from trace import Trace
 from board import Task, Board, TaskStatus, EscalationType, VerifyResult, VerifyType
 from config import nfn, runtime
-from trace import Trace
+
 
 class Controller:
+    """
+    Controller bridges the human and the FN2.
+    """
     board: Board
     ambiguous_tasks: Dict[str, Task]
 
@@ -17,6 +24,9 @@ class Controller:
         self.ambiguous_tasks = {}
 
     async def on_event(self, task: Task):
+        """
+        Handle the event from the board.
+        """
         Trace.log("Controller", f"notify: {task.task_id} goal={task.goal} status={task.status}")
         if task.status == TaskStatus.INIT:
             Trace.log("Controller", f"accept new task: {task.task_id} goal={task.goal} submitter={task.submitter}")
@@ -30,25 +40,32 @@ class Controller:
             result = self.verify(task)
             await self.board.verify_task(task.task_id, result)
             if result.decision == VerifyType.ACCEPT:
-                Trace.log("Controller", f"task success and verified: {task.task_id} goal={task.goal} reason={result}")
+                Trace.log("Controller",
+                    f"task success and verified: {task.task_id} goal={task.goal} reason={result}")
             elif result.decision == VerifyType.RETRY:
-                Trace.log("Controller", f"task failed and need retry: {task.task_id} goal={task.goal} reason={result}")
+                Trace.log("Controller",
+                    f"task failed and need retry: {task.task_id} goal={task.goal} reason={result}")
                 await self.board.accept_task(task.task_id)
             elif result.decision == VerifyType.ESCALATE:
-                Trace.log("Controller", f"task failed and escalated: {task.task_id} goal={task.goal} reason={result}")
-                # TODO: fix the hardcode message
+                Trace.log("Controller",
+                    f"task failed and escalated: {task.task_id} goal={task.goal} reason={result}")
+                ## TODO: fix the hardcode message
                 escalation_type = EscalationType.CAPABILITY_LIMIT if "Capability limit" in result.reason else EscalationType.RESULT_ARBITRARY
                 await self.board.escalate_task(task.task_id, escalation_type)
             else:
-                Trace.error("Controller", f"unknown verify decision: {task.task_id} goal={task.goal}, reason={result.reason}")
+                Trace.error("Controller",
+                    f"unknown verify decision: {task.task_id} goal={task.goal}, reason={result.reason}")
         elif task.status == TaskStatus.ACK:
-            Trace.log("Controller", f"task acknowledged and finished: {task.task_id} goal={task.goal}")
+            Trace.log("Controller",
+                f"task acknowledged and finished: {task.task_id} goal={task.goal}")
             if task.task_id in self.ambiguous_tasks:
-                Trace.log("Controller", f"ACK: found {task.task_id} in ambiguous_tasks, remove and reaccept the updated task")
+                Trace.log("Controller",
+                    f"ACK: found {task.task_id} in ambiguous_tasks, remove and reaccept the updated task")
                 del self.ambiguous_tasks[task.task_id]
 
                 if task.acknowledge.ack and task.escalation_type == EscalationType.REQ_REFINE and task.submitter != "system":
-                    Trace.log("Controller", f"task {task.task_id} ACK passed, reaccept the task and try again")
+                    Trace.log("Controller", 
+                        f"task {task.task_id} ACK passed, reaccept the task and try again")
                     task.extras.append((task.acknowledge.issue, task.acknowledge.result))
                     task.status = TaskStatus.INIT
                     task.actions = []
@@ -61,7 +78,10 @@ class Controller:
     def verify(
         self,
         task: Task,
-    ) -> Dict[str, Any]:
+    ) -> VerifyResult:
+        """
+        Verify the task result.
+        """
         if task.result.success:
             return VerifyResult(
                 decision=VerifyType.ACCEPT,
@@ -96,9 +116,9 @@ class Controller:
                 reason="Failure with manageable uncertainty",
                 next_suggestion="auto retry"
             )
-        else:
-            return VerifyResult(
-                decision=VerifyType.ESCALATE,
-                reason="Auto retry disabled",
-                next_suggestion="manual retry"
-            )
+
+        return VerifyResult(
+            decision=VerifyType.ESCALATE,
+            reason="Auto retry disabled",
+            next_suggestion="manual retry"
+        )

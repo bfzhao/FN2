@@ -1,10 +1,17 @@
+"""
+Analyzer in FN2 framework
+"""
+
 from typing import List
+from trace import Trace
 from llm_analyzer import LLMAnalyzer
 from board import Task, Board, TaskStatus, ActionType, Action
 from dryrun import DryRun
-from trace import Trace
 
 class Analyzer:
+    """
+    Analyzer frames task and plans the step to solve it.
+    """
     comp = "Analyzer"
     board: Board
     dryrun: DryRun
@@ -16,12 +23,18 @@ class Analyzer:
         self.llm_analyzer = LLMAnalyzer()
 
     async def analyze(self, request: str) -> List[Action]:
+        """
+        Analyze the task goal and generate actions.
+        """
         if self.dryrun:
             return await self.dryrun.analyze(request)
         else:
             return await self.llm_analyzer.analyze(request)
 
     async def on_event(self, task: Task):
+        """
+        Event process, start to analyze task if it was accepted.
+        """
         Trace.log("Analyzer", f"notify: {task.task_id} goal={task.goal} status={task.status}")
 
         if task.status == TaskStatus.ACPT:

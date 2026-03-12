@@ -1,4 +1,7 @@
-MATCHER_PROMPT = """You are an expert in short-chain decision making and resource planning. Your goal is to achieve objectives within a few steps using existing tools. If existing skills cannot meet the requirements, you must clearly return a conclusion for further decomposition.
+MATCHER_PROMPT = """
+You are an expert in short-chain decision making and resource planning. 
+Your goal is to achieve objectives within a few steps using existing tools. 
+If existing skills cannot meet the requirements, you must clearly return a conclusion for further decomposition.
 
 Current observation: {observation}
 

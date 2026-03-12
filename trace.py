@@ -1,18 +1,25 @@
-import time
+"""
+Trace log support.
+"""
+
 import os
+import datetime
 from config import runtime
 
-log_file = None
+LOG_FILE = None
 if runtime["log_to_file"]:
     try:
         log_dir = runtime.get("log_folder", "log")
         os.makedirs(log_dir, exist_ok=True)
         log_file_path = os.path.join(log_dir, "agent.log")
-        log_file = open(log_file_path, 'a', encoding='utf-8')
+        LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
     except Exception as e:
         print(f"failed to open log file: {e}")
 
 class Trace:
+    """
+    Trace class was used to log message to console or log file.
+    """
     _COLORS = {
         'reset': '\033[0m',
         'red': '\033[31m',
@@ -23,12 +30,11 @@ class Trace:
         'cyan': '\033[36m',
         'white': '\033[37m'
     }
-    
+
     @staticmethod
     def _format_timestamp():
-        import datetime
         return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3]
-    
+
     _COMPONENT_COLORS = {
         'Task': 'cyan',
         'Board': 'blue',
@@ -51,38 +57,51 @@ class Trace:
     def _build_message(component: str, message: str, level: str = 'info') -> (str, str):
         component_color = Trace._COMPONENT_COLORS.get(component, 'white')
         component_color_code = Trace._COLORS.get(component_color, Trace._COLORS['white'])
-        time_color_code = Trace._COLORS['yellow'] 
+        time_color_code = Trace._COLORS['yellow']
         reset_code = Trace._COLORS['reset']
         timestamp = Trace._format_timestamp()
 
-        console_message = f"{time_color_code}[{timestamp}]{reset_code} {component_color_code}{Trace.log_icons.get(level, '✅')}[{component}]{reset_code} {message}"
+        icon = Trace.log_icons.get(level, '✅')
+        console_message = (
+            f"{time_color_code}[{timestamp}]{reset_code} "
+            f"{component_color_code}{icon}[{component}]{reset_code} {message}"
+        )
         file_message = f"[{timestamp}] [{component}] {message}"
 
         return (console_message, file_message)
-    
+
     @staticmethod
-    def log(component: str, message):
+    def _log(component: str, message: str, level: str):
         if not runtime["trace"].get(component.lower(), False):
             return
 
-        console_message, file_message = Trace._build_message(component, message)
-        if runtime["log_to_file"] and log_file:
+        console_message, file_message = Trace._build_message(component, message, level)
+        if runtime["log_to_file"] and LOG_FILE:
             try:
-                log_file.write(file_message + '\n')
-                log_file.flush()
+                LOG_FILE.write(file_message + '\n')
+                LOG_FILE.flush()
             except Exception as e:
-                pass
+                print(f"failed to write log file: {e}")
         else:
             print(console_message, flush=True)
 
     @staticmethod
-    def error(component: str, message):
-        console_message, file_message = Trace._build_message(component, message, level='error')
-        if runtime["log_to_file"] and log_file:
-            try:
-                log_file.write(file_message + '\n')
-                log_file.flush()
-            except Exception as e:
-                pass
+    def log(component: str, message):
+        """
+        Log info message.
+        """
+        Trace._log(component, message, level='info')
 
-        print(console_message, flush=True)
+    @staticmethod
+    def warn(component: str, message):
+        """
+        Log warning message.
+        """
+        Trace._log(component, message, level='warning')
+
+    @staticmethod
+    def error(component: str, message):
+        """
+        Log error message.
+        """
+        Trace._log(component, message, level='error')

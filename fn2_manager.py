@@ -29,9 +29,9 @@ class FN2Manager:
     _initialized = False
     _root_fn2 = None
 
-    def __init__(self, runtime: dict, human_attention: callable = None):
-        self.board = Board()
-        self.dryrun = DryRun() if runtime["dryrun"] else None
+    def __init__(self, escalate: callable = None, board: Board = None, dryrun: DryRun = None):
+        self.board = board if board else Board()
+        self.dryrun = dryrun
         self.analyzer = Analyzer(self.board, self.dryrun)
         self.execution_engine = ExecutionEngine(self.board, self.dryrun)
         self.synthesizer = Synthesizer(self.board, self.dryrun)
@@ -57,9 +57,9 @@ class FN2Manager:
                 self.controller.on_event,
                 self.execution_engine.on_event])
 
-            if human_attention:
-                self.board.register_event(Event.TASK_VERIFIED, [human_attention])
-                self.board.register_event(Event.TASK_ESCALATED, [human_attention])
+            if escalate:
+                self.board.register_event(Event.TASK_VERIFIED, [escalate])
+                self.board.register_event(Event.TASK_ESCALATED, [escalate])
 
             self._initialized = True
 
@@ -68,6 +68,12 @@ class FN2Manager:
         Get the board instance.
         """
         return self.board
+
+    def get_dryrun(self) -> DryRun:
+        """
+        Get the dryrun instance.
+        """
+        return self.dryrun
 
     def get_fn2(self, task_id: str) -> dict:
         """
@@ -92,7 +98,12 @@ class FN2Manager:
                 return None
 
         fn2 = FN2(new_depth, parent)
+        # Initialize children if not set
+        if fn2.children is None:
+            fn2.children = []
         if parent is not None:
+            if parent.children is None:
+                parent.children = []
             parent.children.append(fn2)
         else:
             fn2.children = []

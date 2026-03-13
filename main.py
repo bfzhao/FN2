@@ -9,6 +9,7 @@ from aioconsole import ainput
 from board import Acknowledge, Task, TaskStatus, ActionType, EscalationType
 from config import runtime
 from fn2_manager import FN2, FN2Manager
+from dryrun import DryRun
 
 
 async def human_attention(task: Task):
@@ -22,7 +23,7 @@ async def human_attention(task: Task):
             Trace.log("Main", f"Task {task.task_id} verified. ready to be check and accepted")
     # user need to ack those message so that the procedure can continue
 
-fn2_manager = FN2Manager(runtime, human_attention)
+fn2_manager = FN2Manager(escalate=human_attention, dryrun=DryRun() if runtime["dryrun"] else None)
 
 def show_help():
     """
@@ -37,7 +38,7 @@ def show_help():
     print("  '/dump <id>' to dump the task with the given id")
     print("  '/p <id>' to process esclated task")
 
-def dump_fn2_tree(fn2: FN2 = None, level: int = 0, parent_action_indent: str = ""):
+def dump_fn2_tree(manager: FN2Manager, fn2: FN2 = None, level: int = 0, parent_action_indent: str = ""):
     """
     Dump the FN2 tree structure.
     """
@@ -45,8 +46,8 @@ def dump_fn2_tree(fn2: FN2 = None, level: int = 0, parent_action_indent: str = "
     number_emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
 
     if fn2 is None:
-        fn2 = fn2_manager.get_root_fn2()
-        dump_fn2_tree(fn2)
+        fn2 = manager.get_root_fn2()
+        dump_fn2_tree(manager, fn2)
         return
 
     if parent_action_indent:
@@ -80,8 +81,8 @@ def dump_fn2_tree(fn2: FN2 = None, level: int = 0, parent_action_indent: str = "
                 print(step_str)
 
                 if action.result.track_id:
-                    child = fn2_manager.get_fn2(action.result.track_id)
-                    dump_fn2_tree(child, level + 1, action_indent)
+                    child = manager.get_fn2(action.result.track_id)
+                    dump_fn2_tree(manager, child, level + 1, action_indent)
             elif action.type == ActionType.INQUERY:
                 step_str = f"{action_indent}{emoji_num} Inquery: {action.inquery}"
                 if action.result and action.result.result:
@@ -100,7 +101,7 @@ async def handle_command(cmd: str):
     if cmd == "/h":
         show_help()
     elif cmd == "/ls":
-        dump_fn2_tree()
+        dump_fn2_tree(fn2_manager)
     elif cmd.startswith("/trace"):
         parts = cmd.split()
         if len(parts) == 3:
@@ -213,6 +214,6 @@ async def main():
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-        dump_fn2_tree()
+        dump_fn2_tree(fn2_manager)
     except KeyboardInterrupt:
         sys.exit(0)

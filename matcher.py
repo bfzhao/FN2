@@ -8,12 +8,11 @@ import re
 from trace import Trace
 from typing import Dict, Any, List, Tuple
 from llm_wrapper import LLMWrapper
-import llm_wrapper
 from matcher_prompt import MATCHER_PROMPT
 from matcher_verify_prompt import VERIFY_PROMPT
 from board import Action
 
-SKILLS_DIR = os.path.join(".trae", "skills")
+SKILLS_DIR = "skills"
 MAX_ITERATIONS = 3
 ERROR_THRESHOLD = 0.15
 
@@ -214,7 +213,9 @@ class Matcher:
                 return success, final_answer
 
             self.try_count += 1
-            self.plan = self.match()
+            # Don't assign the return value of match() to self.plan
+            # match() already sets self.plan when successful
+            self.match()
 
         Trace.log("Matcher", f"Failed to match plan after {MAX_ITERATIONS} attempts")
         return False, None
@@ -291,14 +292,26 @@ class Matcher:
 
         print(json_str)
         try:
+            # Check if JSON string is complete
+            if json_str.count('{') != json_str.count('}'):
+                print("JSON string is incomplete - missing closing braces")
+                # Try to fix by adding missing braces
+                open_braces = json_str.count('{')
+                close_braces = json_str.count('}')
+                if open_braces > close_braces:
+                    json_str += '}' * (open_braces - close_braces)
+                    print("Fixed JSON string:", json_str)
+
             plan = json.loads(json_str)
-            if plan.get("conclusion", {}).get("answer") == "是":
+            answer = plan.get("conclusion", {}).get("answer", "").lower()
+            print(f"Extracted answer: '{answer}'")
+            if answer in ["是", "yes"]:
                 self.plan = plan
                 return True
             else:
                 return False
         except Exception as e:
-            Trace.error("Matcher", f"parse plan error: {e}, json_str: {json_str}")
+            print(f"parse plan error: {e}, json_str: {json_str}")
             return False
 
     def _validate_final_answer(self, observation: str, final_answer: str) -> float:

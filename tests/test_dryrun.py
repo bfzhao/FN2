@@ -1,27 +1,25 @@
+""" dryrun test """
 import asyncio
-import sys
+import pytest
 
-sys.path.insert(0, '..')
-from board import Board, TaskStatus, EscalationType, Acknowledge
+from board import Board, TaskStatus, EscalationType, Acknowledge, Event
 from dryrun import DryRun, VerificationInfo
-from fnfn import FN2
 from tests.test_scenarios import test_scenarios
 from config import runtime
 from main import dump_fn2_tree
-from trace import Trace
+from fn2_manager import FN2Manager
 
+# Set up runtime configuration
 runtime["dryrun"] = True
 for component in runtime["trace"]:
     runtime["trace"][component] = False
 
 
 class TestRunner:
-    def __init__(self, board: Board, dryrun: DryRun):
-        self.fn2 = None
-        self.board = board
-        self.dryrun = dryrun
-
-        from board import Event
+    def __init__(self, fn2_manager: FN2Manager):
+        self.fn2_manager = fn2_manager
+        self.board = fn2_manager.get_board()
+        self.dryrun = fn2_manager.get_dryrun()
         self.board.register_event(Event.TASK_ESCALATED, [self.handle_escalation])
 
     def _find_inquery_config(self, task_def, goal):
@@ -76,7 +74,14 @@ class TestRunner:
         print(f"run scenario: {scenario_name}")
 
         self.dryrun.load_runtime_config()
-        self.fn2 = await FN2.spawn("test", self.scenario.name)
+        
+        # Set dryrun for the manager
+        if self.fn2_manager and hasattr(self.fn2_manager, 'dryrun'):
+            self.fn2_manager.dryrun = self.dryrun
+        
+        # Spawn FN2 instance
+        if self.fn2_manager:
+            self.fn2 = await self.fn2_manager.spawn_fn2("test", self.scenario.name)
 
         max_wait = 30  # wait for 30 seconds
         wait_time = 0
@@ -117,9 +122,10 @@ class TestRunner:
     def _get_children(self, fn2):
         """获取 FN2 节点的子节点"""
         children = []
-        for f in FN2._task_to_fn2.values():
-            if f.parent == fn2:
-                children.append(f)
+        if self.fn2_manager and hasattr(self.fn2_manager, 'task_to_fn2'):
+            for f in self.fn2_manager.task_to_fn2.values():
+                if f.parent == fn2:
+                    children.append(f)
         return children
 
     def _verify_generic_scenario(self, root_task, verification: VerificationInfo) -> bool:
@@ -213,43 +219,132 @@ class TestRunner:
 
 
 async def run_case(scenario: str):
-    FN2.reset()
     dryrun = DryRun()
     board = Board()
-    FN2.init_components(board, dryrun)
 
     async with board:
-        runner = TestRunner(board, dryrun)
+        fn2_manager = FN2Manager(board=board, dryrun=dryrun)
+        runner = TestRunner(fn2_manager)
         success = await runner.run_scenario(scenario)
         print("\nTask Tree:")
-        dump_fn2_tree()
-
+        dump_fn2_tree(fn2_manager)
         return success
 
-async def run_tests(tests: list[str]):
-    print("          *** Start to run DryRun test suite ***")
 
-    results = {}
-    for scenario_name in tests:
-        success = await run_case(scenario_name)
-        results[scenario_name] = success
-
-    print("\n" + "="*60)
-    print("Test Report")
-    print("="*60)
-
-    passed = sum(1 for v in results.values() if v)
-    total = len(results)
-
-    for scenario_name, success in results.items():
-        status = "✅ Passed" if success else "❌ Failed"
-        print(f"{status}: {scenario_name}")
-
-    print(f"Summary: {passed}/{total} passed")
-    return all(results.values())
+@pytest.mark.asyncio
+async def test_success_scenario():
+    """Test success scenario"""
+    result = await run_case("success")
+    assert result, "Success scenario test failed"
 
 
-if __name__ == "__main__":
-    test_names = [sys.argv[1]] if len(sys.argv) > 1 else list(test_scenarios.keys())
-    success = asyncio.run(run_tests(test_names))
-    sys.exit(0 if success else 1)
+@pytest.mark.asyncio
+async def test_failure_scenario():
+    """Test failure scenario"""
+    result = await run_case("failure")
+    assert result, "Failure scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_nested_scenario():
+    """Test nested scenario"""
+    result = await run_case("nested")
+    assert result, "Nested scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_retry_scenario():
+    """Test retry scenario"""
+    result = await run_case("retry")
+    assert result, "Retry scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_inquery_scenario():
+    """Test inquery scenario"""
+    result = await run_case("inquery")
+    assert result, "Inquery scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_cancel_scenario():
+    """Test cancel scenario"""
+    result = await run_case("cancel")
+    assert result, "Cancel scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_depth_limit_scenario():
+    """Test depth limit scenario"""
+    result = await run_case("depth_limit")
+    assert result, "Depth limit scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_subtask_fail_scenario():
+    """Test subtask fail scenario"""
+    result = await run_case("subtask_fail")
+    assert result, "Subtask fail scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_synthesize_scenario():
+    """Test synthesize scenario"""
+    result = await run_case("synthesize")
+    assert result, "Synthesize scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_multiple_children_scenario():
+    """Test multiple children scenario"""
+    result = await run_case("multiple_children")
+    assert result, "Multiple children scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_mixed_children_scenario():
+    """Test mixed children scenario"""
+    result = await run_case("mixed_children")
+    assert result, "Mixed children scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_empty_steps_scenario():
+    """Test empty steps scenario"""
+    result = await run_case("empty_steps")
+    assert result, "Empty steps scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_single_step_scenario():
+    """Test single step scenario"""
+    result = await run_case("single_step")
+    assert result, "Single step scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_auto_retry_disabled_scenario():
+    """Test auto retry disabled scenario"""
+    result = await run_case("auto_retry_disabled")
+    assert result, "Auto retry disabled scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_auto_retry_enabled_scenario():
+    """Test auto retry enabled scenario"""
+    result = await run_case("auto_retry_enabled")
+    assert result, "Auto retry enabled scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_auto_fail_disabled_scenario():
+    """Test auto fail disabled scenario"""
+    result = await run_case("auto_fail_disabled")
+    assert result, "Auto fail disabled scenario test failed"
+
+
+@pytest.mark.asyncio
+async def test_auto_fail_enabled_scenario():
+    """Test auto fail enabled scenario"""
+    result = await run_case("auto_fail_enabled")
+    assert result, "Auto fail enabled scenario test failed"

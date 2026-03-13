@@ -8,13 +8,10 @@ from config import runtime
 
 LOG_FILE = None
 if runtime["log_to_file"]:
-    try:
-        log_dir = runtime.get("log_folder", "log")
-        os.makedirs(log_dir, exist_ok=True)
-        log_file_path = os.path.join(log_dir, "agent.log")
-        LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
-    except Exception as e:
-        print(f"failed to open log file: {e}")
+    log_dir = runtime.get("log_folder", "log")
+    os.makedirs(log_dir, exist_ok=True)
+    log_file_path = os.path.join(log_dir, "agent.log")
+    LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
 
 class Trace:
     """
@@ -77,11 +74,8 @@ class Trace:
 
         console_message, file_message = Trace._build_message(component, message, level)
         if runtime["log_to_file"] and LOG_FILE:
-            try:
-                LOG_FILE.write(file_message + '\n')
-                LOG_FILE.flush()
-            except Exception as e:
-                print(f"failed to write log file: {e}")
+            LOG_FILE.write(file_message + '\n')
+            LOG_FILE.flush()
         else:
             print(console_message, flush=True)
 

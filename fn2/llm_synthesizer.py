@@ -4,10 +4,10 @@ LLM synthesizer for FN2 framework
 
 import json
 from typing import List
-from trace import Trace
-from board import TaskResult, Action
-from llm_synthesizer_prompt import SYNTHESIZER_PROMPT
-from llm_wrapper import LLMWrapper
+from utils.trace import Trace
+from fn2.board import TaskResult, Action
+from fn2.llm_synthesizer_prompt import SYNTHESIZER_PROMPT
+from fn2.llm_wrapper import LLMWrapper
 
 class LLMSynthesizer:
     """

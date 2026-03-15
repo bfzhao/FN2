@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FN2 Agent 管理界面</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome -->
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        success: '#10b981',
+                        warning: '#f59e0b',
+                        danger: '#ef4444',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .transition-all-300 {
+                transition: all 300ms ease-in-out;
+            }
+            .shadow-card {
+                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+    <!-- 顶部导航栏 -->
+    <nav class="bg-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-robot text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-primary">FN2 Agent</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="create-task-btn"
+                    class="px-3 py-1 bg-primary text-white rounded-md hover:bg-blue-600 transition-all-300">
+                    <i class="fa fa-plus"></i>
+                </button>
+                <button id="refresh-btn" class="px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition-all-300">
+                    <i class="fa fa-refresh"></i>
+                </button>
+                <button id="notifications-btn"
+                    class="relative px-3 py-1 bg-gray-200 rounded-md hover:bg-gray-300 transition-all-300">
+                    <i class="fa fa-bell"></i>
+                    <span id="notification-badge"
+                        class="absolute top-0 right-0 bg-danger text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">0</span>
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <div class="container mx-auto px-4 py-6">
+
+
+        <!-- 状态概览 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white rounded-lg shadow-card p-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-md font-medium">总任务数</h3>
+                    <span class="text-2xl font-bold text-primary" id="total-tasks">0</span>
+                </div>
+                <p class="text-sm text-gray-500">所有创建的任务</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-card p-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-md font-medium">进行中</h3>
+                    <span class="text-2xl font-bold text-warning" id="running-tasks">0</span>
+                </div>
+                <p class="text-sm text-gray-500">正在处理的任务</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-card p-4">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-md font-medium">需处理</h3>
+                    <span class="text-2xl font-bold text-danger" id="pending-tasks">0</span>
+                </div>
+                <p class="text-sm text-gray-500">需要用户处理的任务</p>
+            </div>
+        </div>
+
+        <!-- 任务列表和升级任务 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 任务列表 -->
+            <div class="bg-white rounded-lg shadow-card p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-semibold">任务列表</h2>
+                    <div class="flex space-x-2">
+                        <button class="task-filter-btn px-3 py-1 rounded-md bg-primary text-white"
+                            data-filter="all">全部</button>
+                        <button class="task-filter-btn px-3 py-1 rounded-md bg-gray-200"
+                            data-filter="running">进行中</button>
+                        <button class="task-filter-btn px-3 py-1 rounded-md bg-gray-200"
+                            data-filter="completed">已完成</button>
+                    </div>
+                </div>
+                <div class="overflow-y-auto max-h-96" id="task-list">
+                    <!-- 任务项将通过JavaScript动态添加 -->
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fa fa-tasks text-3xl mb-2"></i>
+                        <p>暂无任务</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 升级任务 -->
+            <div class="bg-white rounded-lg shadow-card p-4">
+                <h2 class="text-lg font-semibold mb-4">需要处理的任务</h2>
+                <div class="overflow-y-auto max-h-96" id="escalated-tasks">
+                    <!-- 升级任务将通过JavaScript动态添加 -->
+                    <div class="text-center text-gray-500 py-8">
+                        <i class="fa fa-exclamation-triangle text-3xl mb-2 text-warning"></i>
+                        <p>暂无需要处理的任务</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务树 -->
+        <div class="bg-white rounded-lg shadow-card p-4 mt-6">
+            <h2 class="text-lg font-semibold mb-4">任务树</h2>
+            <div class="overflow-x-auto" id="task-tree">
+                <!-- 任务树将通过JavaScript动态添加 -->
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fa fa-sitemap text-3xl mb-2"></i>
+                    <p>暂无任务树数据</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知模态框 -->
+    <div id="notification-modal"
+        class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">通知</h3>
+                <button id="close-notification-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="max-h-80 overflow-y-auto" id="notification-list">
+                <!-- 通知将通过JavaScript动态添加 -->
+            </div>
+            <div class="mt-4 flex justify-end">
+                <button id="mark-all-read"
+                    class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-all-300">
+                    全部标为已读
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 任务详情模态框 -->
+    <div id="task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" id="modal-task-title">任务详情</h3>
+                <button id="close-task-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div id="modal-task-content">
+                <!-- 任务详情将通过JavaScript动态添加 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 升级任务处理模态框 -->
+    <div id="escalation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">处理升级任务</h3>
+                <button id="close-escalation-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div id="escalation-form">
+                <!-- 升级任务表单将通过JavaScript动态添加 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建任务模态框 -->
+    <div id="create-task-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">创建新任务</h3>
+                <button id="close-create-task-modal" class="text-gray-500 hover:text-gray-700">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">任务目标</label>
+                    <input type="text" id="task-input" placeholder="输入任务目标..." class="mt-1 w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">
+                </div>
+                <div class="flex justify-end space-x-2">
+                    <button id="cancel-create-task" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-all-300">
+                        取消
+                    </button>
+                    <button id="submit-create-task" class="px-4 py-2 bg-primary text-white rounded-md hover:bg-blue-600 transition-all-300">
+                        创建
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

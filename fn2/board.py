@@ -11,7 +11,7 @@ from enum import Enum
 from typing import Dict, Callable, List
 import uuid
 import time
-from trace import Trace
+from utils.trace import Trace
 
 class Event(Enum):
     """Enumeration of task life-cycle events emitted by the Board."""

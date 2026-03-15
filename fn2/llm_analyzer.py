@@ -4,10 +4,10 @@ An LLM analyzer implementation.
 
 import json
 from typing import List
-from trace import Trace
-from board import Action, ActionType
-from llm_analyzer_prompt import ANALYSIS_PROMPT
-from llm_wrapper import LLMWrapper
+from utils.trace import Trace
+from fn2.board import Action, ActionType
+from fn2.llm_analyzer_prompt import ANALYSIS_PROMPT
+from fn2.llm_wrapper import LLMWrapper
 
 class LLMAnalyzer:
     """

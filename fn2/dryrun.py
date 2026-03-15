@@ -6,8 +6,9 @@ import asyncio
 import random
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from board import Action, ActionType, ActionResult, TaskResult, Trace, TaskStatus, EscalationType
-from config import runtime
+from fn2.board import Action, ActionType, ActionResult, TaskResult, TaskStatus, EscalationType
+from utils.trace import Trace
+from config.settings import runtime
 
 
 @dataclass
@@ -132,7 +133,8 @@ class DryRun:
         """
         analyze in dryrun mode, driven by scenario of random generated
         """
-        Trace.log("DryRun", f"run ANALYSIS: request '{request}', scenario '{self.scenario.name}'")
+        name = self.scenario.name if self.scenario else "N/A"
+        Trace.log("DryRun", f"run ANALYSIS: request '{request}', scenario '{name}'")
         steps = []
         if runtime["dryrun"]:
             task_def = self._get_current_task_def(request)
@@ -169,7 +171,7 @@ class DryRun:
                         steps.append(Action(
                             type=ActionType.OPERATION,
                             request=request,
-                            operation=f"操作{i} for '{request}'",
+                            operation=f"step {i} for '{request}'",
                         ))
                 else:
                     Trace.log("DryRun", "ANALYSIS: data inquery generated")

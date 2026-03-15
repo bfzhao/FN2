@@ -2,8 +2,8 @@ import sys
 import pytest
 
 sys.path.insert(0, '..')
-from matcher import Matcher
-from board import Action, ActionType
+from fn2.matcher import Matcher
+from fn2.board import Action, ActionType
 
 
 def test_matcher_match():

@@ -3,10 +3,10 @@ Analyzer in FN2 framework
 """
 
 from typing import List
-from trace import Trace
-from llm_analyzer import LLMAnalyzer
-from board import Task, Board, TaskStatus, ActionType, Action
-from dryrun import DryRun
+from utils.trace import Trace
+from fn2.llm_analyzer import LLMAnalyzer
+from fn2.board import Task, Board, TaskStatus, ActionType, Action
+from fn2.dryrun import DryRun
 
 class Analyzer:
     """

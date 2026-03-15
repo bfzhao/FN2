@@ -1,6 +1,6 @@
 """Test scenarios for FN2 dryrun"""
 
-from dryrun import Scenario, TaskDef, VerificationInfo, RuntimeConfig
+from fn2.dryrun import Scenario, TaskDef, VerificationInfo, RuntimeConfig
 
 def get_success_scenario():
     """Normal success test scenario"""

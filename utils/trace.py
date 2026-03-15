@@ -4,14 +4,50 @@ Trace log support.
 
 import os
 import datetime
-from config import runtime
+import atexit
+from config.settings import runtime
 
 LOG_FILE = None
-if runtime["log_to_file"]:
-    log_dir = runtime.get("log_folder", "log")
-    os.makedirs(log_dir, exist_ok=True)
-    log_file_path = os.path.join(log_dir, "agent.log")
-    LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
+
+def close_log_file():
+    """
+    Close the log file if it's open.
+    """
+    # pylint: disable=global-statement
+    global LOG_FILE
+    if LOG_FILE:
+        try:
+            LOG_FILE.close()
+            LOG_FILE = None
+        except Exception:
+            pass
+
+def init_log_file():
+    """
+    Initialize the log file if log_to_file is True.
+    Always reinitialize in daemon mode to ensure proper file handling.
+    """
+    # pylint: disable=global-statement
+    global LOG_FILE
+    if runtime.get("log_to_file", False):
+        # Always close existing log file if open
+        if LOG_FILE:
+            close_log_file()
+        log_dir = runtime.get("log_folder", "log")
+        # Use absolute path to ensure it works in daemon mode
+        if not os.path.isabs(log_dir):
+            # Get project root directory (parent of utils directory)
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            log_dir = os.path.join(project_root, log_dir)
+        os.makedirs(log_dir, exist_ok=True)
+        log_file_path = os.path.join(log_dir, "agent.log")
+        # pylint: disable=consider-using-with
+        LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
+        atexit.register(close_log_file)
+
+# Initialize log file on module load
+init_log_file()
 
 class Trace:
     """
@@ -76,7 +112,7 @@ class Trace:
         if runtime["log_to_file"] and LOG_FILE:
             LOG_FILE.write(file_message + '\n')
             LOG_FILE.flush()
-        else:
+        elif not runtime.get("daemon", False):
             print(console_message, flush=True)
 
     @staticmethod
@@ -99,3 +135,10 @@ class Trace:
         Log error message.
         """
         Trace._log(component, message, level='error')
+
+    @staticmethod
+    def close():
+        """
+        Close the log file if it's open.
+        """
+        close_log_file()

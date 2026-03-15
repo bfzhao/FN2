@@ -3,12 +3,12 @@ Executor in FN2 framework.
 """
 
 import subprocess
-from trace import Trace
+from utils.trace import Trace
 from typing import Dict, Any, Set, List
-from board import Action, ActionResult, Task, Board, TaskStatus, Acknowledge, ActionType
-from dryrun import DryRun
-from config import runtime
-from matcher import Matcher
+from fn2.board import Action, ActionResult, Task, Board, TaskStatus, Acknowledge, ActionType
+from fn2.dryrun import DryRun
+from config.settings import runtime
+from fn2.matcher import Matcher
 
 class ExecutionEngine:
     """
@@ -121,7 +121,7 @@ class ExecutionEngine:
                 del self.pending_tracks[task.task_id]
                 Trace.log("Executor", f"trying to resume this task {pending_id}")
                 await self.resume_task(pending_id)
-        elif task.status == TaskStatus.VRFY or task.status == TaskStatus.ESCL:
+        elif task.status in [TaskStatus.VRFY, TaskStatus.ESCL]:
             # do we need to ack the task?
             if self._parent_task_is_blocked(task.task_id):
                 if task.status == TaskStatus.VRFY:

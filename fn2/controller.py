@@ -2,9 +2,9 @@
 Controller in FN2 framework.
 """
 from typing import Dict
-from trace import Trace
-from board import Task, Board, TaskStatus, EscalationType, VerifyResult, VerifyType
-from config import nfn, runtime
+from utils.trace import Trace
+from fn2.board import Task, Board, TaskStatus, EscalationType, VerifyResult, VerifyType
+from config.settings import nfn, runtime
 
 
 class Controller:
@@ -50,7 +50,10 @@ class Controller:
                 Trace.log("Controller",
                     f"task failed and escalated: {task.task_id} goal={task.goal} reason={result}")
                 ## TODO: fix the hardcode message
-                escalation_type = EscalationType.CAPABILITY_LIMIT if "Capability limit" in result.reason else EscalationType.RESULT_ARBITRARY
+                if "Capability limit" in result.reason:
+                    escalation_type = EscalationType.CAPABILITY_LIMIT
+                else:
+                    escalation_type = EscalationType.RESULT_ARBITRARY
                 await self.board.escalate_task(task.task_id, escalation_type)
             else:
                 Trace.error("Controller",
@@ -59,19 +62,17 @@ class Controller:
             Trace.log("Controller",
                 f"task acknowledged and finished: {task.task_id} goal={task.goal}")
             if task.task_id in self.ambiguous_tasks:
-                Trace.log("Controller",
-                    f"ACK: found {task.task_id} in ambiguous_tasks, remove and reaccept the updated task")
                 del self.ambiguous_tasks[task.task_id]
-
-                if task.acknowledge.ack and task.escalation_type == EscalationType.REQ_REFINE and task.submitter != "system":
-                    Trace.log("Controller", 
-                        f"task {task.task_id} ACK passed, reaccept the task and try again")
-                    task.extras.append((task.acknowledge.issue, task.acknowledge.result))
-                    task.status = TaskStatus.INIT
-                    task.actions = []
-                    task.result = None
-                    task.acknowledge = None
-                    await self.board.accept_task(task.task_id, clarify=True)
+                if task.acknowledge.ack and task.escalation_type == EscalationType.REQ_REFINE:
+                    if task.submitter != "system":
+                        Trace.log("Controller",
+                            f"task {task.task_id} ACK passed, reaccept the task and try again")
+                        task.extras.append((task.acknowledge.issue, task.acknowledge.result))
+                        task.status = TaskStatus.INIT
+                        task.actions = []
+                        task.result = None
+                        task.acknowledge = None
+                        await self.board.accept_task(task.task_id, clarify=True)
             else:
                 Trace.log("Controller", f"ACK: {task.task_id} NOT found in ambiguous_tasks, DONE")
 

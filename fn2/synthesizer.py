@@ -3,10 +3,10 @@ Synthesizer in FN2 framework
 """
 
 from typing import List
-from trace import Trace
-from llm_synthesizer import LLMSynthesizer
-from board import Task, Board, TaskStatus, Action, TaskResult
-from dryrun import DryRun
+from utils.trace import Trace
+from fn2.llm_synthesizer import LLMSynthesizer
+from fn2.board import Task, Board, TaskStatus, Action, TaskResult
+from fn2.dryrun import DryRun
 
 class Synthesizer:
     """

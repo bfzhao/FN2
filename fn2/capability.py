@@ -1,4 +1,5 @@
-from typing import List, Dict
+from typing import List
+import json
 
 # -------------------------------
 # 1. Capability: abstract ability
@@ -31,12 +32,10 @@ class Skill:
 # 4. Extension: tool or platform
 # -------------------------------
 class Extension:
-    def __init__(self, name: str, skills: List[str], description: str):
-        self.name = name            # tool/platform name, e.g., "OpenAI_API"
-        self.skills = skills        # list of skill names it provides
+    def __init__(self, name: str, skill_list: List[str], description: str):
+        self.name = name                # tool/platform name, e.g., "OpenAI_API"
+        self.skill_list = skill_list    # list of skill names it provides
         self.description = description
-
-import json
 
 def load_json(path: str):
     with open(path, "r", encoding="utf-8") as f:

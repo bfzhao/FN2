@@ -3,12 +3,12 @@ FN2 manager
 """
 
 from dataclasses import dataclass
-from board import Board, Event, Task
-from dryrun import DryRun
-from analyzer import Analyzer
-from execution_engine import ExecutionEngine
-from synthesizer import Synthesizer
-from controller import Controller
+from fn2.board import Board, Event, Task
+from fn2.dryrun import DryRun
+from fn2.analyzer import Analyzer
+from fn2.execution_engine import ExecutionEngine
+from fn2.synthesizer import Synthesizer
+from fn2.controller import Controller
 
 @dataclass
 class FN2:
@@ -27,7 +27,7 @@ class FN2Manager:
     FN2 manager manages all instances of FN2 framework.
     """
     _initialized = False
-    _root_fn2 = None
+    _root_fn2 = []
 
     def __init__(self, escalate: callable = None, board: Board = None, dryrun: DryRun = None):
         self.board = board if board else Board()
@@ -81,7 +81,7 @@ class FN2Manager:
         """
         return self.task_to_fn2.get(task_id, None)
 
-    def get_root_fn2(self) -> FN2:
+    def get_root_fn2(self) -> list[FN2]:
         """
         Get the root FN2 instance.
         """
@@ -111,5 +111,5 @@ class FN2Manager:
         fn2.task = await self.board.submit_task(request, identifier)
         self.task_to_fn2[fn2.task.task_id] = fn2
         if new_depth == 0:
-            self._root_fn2 = fn2
+            self._root_fn2.append(fn2)
         return fn2

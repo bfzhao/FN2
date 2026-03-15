@@ -2,14 +2,16 @@
 import asyncio
 import pytest
 
-from board import Board, TaskStatus, EscalationType, Acknowledge, Event
-from dryrun import DryRun, VerificationInfo
+from fn2.board import Board, TaskStatus, EscalationType, Acknowledge, Event
+from fn2.dryrun import DryRun, VerificationInfo
 from tests.test_scenarios import test_scenarios
-from config import runtime
-from main import dump_fn2_tree
-from fn2_manager import FN2Manager
+from config.settings import runtime
+from fn2.interactive_mode import InteractiveMode
+from fn2.fn2_manager import FN2Manager
 
 # Set up runtime configuration
+# Note: These modifications are applied at module level and affect all tests
+# This is intentional for the test suite
 runtime["dryrun"] = True
 for component in runtime["trace"]:
     runtime["trace"][component] = False
@@ -20,7 +22,14 @@ class TestRunner:
         self.fn2_manager = fn2_manager
         self.board = fn2_manager.get_board()
         self.dryrun = fn2_manager.get_dryrun()
-        self.board.register_event(Event.TASK_ESCALATED, [self.handle_escalation])
+        self.escalation_handler = self.handle_escalation
+        self.board.register_event(Event.TASK_ESCALATED, [self.escalation_handler])
+
+    def cleanup(self):
+        """Clean up event handlers"""
+        # Note: Board class doesn't have unregister_event method
+        # Event handlers will be cleaned up when board is destroyed
+        pass
 
     def _find_inquery_config(self, task_def, goal):
         """Recursively find task's inquery configuration"""
@@ -223,12 +232,23 @@ async def run_case(scenario: str):
     board = Board()
 
     async with board:
+        # Reset FN2Manager._initialized to ensure clean state
+        from fn2.fn2_manager import FN2Manager
+        FN2Manager._initialized = False
+        FN2Manager._root_fn2 = []
+
         fn2_manager = FN2Manager(board=board, dryrun=dryrun)
         runner = TestRunner(fn2_manager)
-        success = await runner.run_scenario(scenario)
-        print("\nTask Tree:")
-        dump_fn2_tree(fn2_manager)
-        return success
+        try:
+            success = await runner.run_scenario(scenario)
+            print("\nTask Tree:")
+            # Use InteractiveMode to dump the tree
+            interactive = InteractiveMode(fn2_manager)
+            interactive.dump_fn2_tree()
+            return success
+        finally:
+            # Clean up event handlers
+            runner.cleanup()
 
 
 @pytest.mark.asyncio

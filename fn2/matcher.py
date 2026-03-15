@@ -5,12 +5,12 @@ import json
 import subprocess
 import os
 import re
-from trace import Trace
+from utils.trace import Trace
 from typing import Dict, Any, List, Tuple
-from llm_wrapper import LLMWrapper
-from matcher_prompt import MATCHER_PROMPT
-from matcher_verify_prompt import VERIFY_PROMPT
-from board import Action
+from fn2.llm_wrapper import LLMWrapper
+from fn2.matcher_prompt import MATCHER_PROMPT
+from fn2.matcher_verify_prompt import VERIFY_PROMPT
+from fn2.board import Action
 
 SKILLS_DIR = "skills"
 MAX_ITERATIONS = 3
@@ -194,8 +194,6 @@ def execute_skill_call(skill_call: Dict) -> List[str]:
         results.append(result)
 
     return results
-
-MAX_ITERATIONS = 3
 
 class Matcher:
     def __init__(self, step: Action):

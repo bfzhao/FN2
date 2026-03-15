@@ -3,7 +3,7 @@ LLM wrapper for local language model
 """
 
 from openai import OpenAI
-from config import llm
+from config.settings import llm
 
 class LLMWrapper:
     """

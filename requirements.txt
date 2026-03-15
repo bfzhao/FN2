@@ -2,6 +2,11 @@
 aioconsole==0.8.2
 openai==2.16.0
 
+# Web service dependencies
+fastapi==0.135.1
+uvicorn==0.41.0
+pydantic==2.12.5
+
 # Development dependencies
 pytest==8.0.0
 pytest-asyncio==0.21.0

@@ -18,7 +18,10 @@ skills = {
 }
 
 runtime = {
-    "dryrun": True,
+    "dryrun": {
+        "enabled": True,
+        "subtask_escalate": False,
+    },
     "success": 0.8,
     "trace": {
         "main": True,
@@ -37,5 +40,6 @@ runtime = {
     "log_to_file": True,
     "auto_fail_system_escalation": True,
     "auto_retry_tasks": False,
-    "daemon": False
+    "port": 8021,
+    "host": "127.0.0.1"
 }

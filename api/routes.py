@@ -1,12 +1,10 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+import traceback
 from typing import Optional
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from config.settings import runtime
 from utils.trace import Trace
 from fn2.attention_notifier import get_notifier
 from fn2.board import TaskStatus, EscalationType, Acknowledge, ActionType
-import os
 
 from api.models import (
     TaskCreateRequest, TaskAcknowledgeRequest, TaskResponse,
@@ -20,15 +18,31 @@ def setup_routes(app: FastAPI):
     # Add middleware to log all requests
     @app.middleware("http")
     async def log_requests(request, call_next):
-        print(f"Request: {request.method} {request.url.path}")
         response = await call_next(request)
-        print(f"Response: {response.status_code}")
         return response
 
-    # Test route
-    @app.get("/test")
-    async def test():
-        return {"message": "Test route works"}
+    # WebSocket endpoint for real-time notifications
+    @app.websocket("/api/ws/notifications")
+    async def websocket_notifications(websocket: WebSocket):
+        """WebSocket endpoint for real-time notifications"""
+        await websocket.accept()
+        Trace.log("Web", f"WebSocket connection accepted from {websocket.client}")
+
+        notifier = get_notifier()
+        notifier.register_websocket(websocket)
+
+        try:
+            # Keep the connection alive and handle client messages
+            while True:
+                # Wait for messages from client (can be used for ping/pong or client commands)
+                data = await websocket.receive_text()
+                Trace.log("Web", f"WebSocket received: {data}")
+        except WebSocketDisconnect:
+            Trace.log("Web", f"WebSocket disconnected: {websocket.client}")
+        except Exception as e:
+            Trace.error("Web", f"WebSocket error: {e}")
+        finally:
+            notifier.unregister_websocket(websocket)
 
     # API Routes
     @app.get("/api/status", response_model=StatusResponse)
@@ -40,10 +54,9 @@ def setup_routes(app: FastAPI):
 
     @app.get("/api/notifications", response_model=NotificationResponse)
     async def get_notifications(since: Optional[float] = None):
-        """Get notifications since a given timestamp"""
+        """Get notifications since a given timestamp (fallback for polling)"""
         notifier = get_notifier()
         events = notifier.get_events(since)
-        Trace.log("Web", f"Returned {len(events)} notifications")
         return NotificationResponse(events=events, count=len(events))
 
 
@@ -83,7 +96,6 @@ def setup_routes(app: FastAPI):
                                 inquiries=inquery_actions
                             ))
 
-            Trace.log("Web", f"Returned {len(pending_tasks)} escalated tasks")
             return EscalatedTasksResponse(tasks=pending_tasks, count=len(pending_tasks))
 
         except Exception as e:
@@ -104,39 +116,17 @@ def setup_routes(app: FastAPI):
             Trace.log("Web", "fn2_manager available, spawning fn2")
             fn2 = await app.state.fn2_manager.spawn_fn2("user", request.goal)
             if fn2 is None:
-                Trace.log("Web", "spawn_fn2 returned None")
+                Trace.log("Web", "Failed to spawn fn2")
                 return TaskResponse(status="error", task_id="")
-            Trace.log("Web", f"fn2 spawned successfully, task id: {fn2.task.task_id}")
-            Trace.log("Web", f"Received task with goal: '{request.goal}', task id: {fn2.task.task_id}")
+
+            Trace.log("Web", f"fn2 spawned successfully, task_id: {fn2.task.task_id}")
             return TaskResponse(status="success", task_id=fn2.task.task_id)
         except Exception as e:
             Trace.log("Web", f"Error creating task: {str(e)}")
-            import traceback
-            Trace.log("Web", f"Traceback: {traceback.format_exc()}")
-            return TaskResponse(status="error", task_id="")
+            Trace.log("Web", traceback.format_exc())
+            return TaskResponse(status="error", task_id="", message=str(e))
 
 
-    @app.post("/api/task/{task_id}/acknowledge", response_model=AcknowledgeResponse)
-    async def acknowledge_task(task_id: str, request: TaskAcknowledgeRequest):
-        """Acknowledge an escalated task"""
-        try:
-            # Check if fn2_manager is available
-            if not hasattr(app.state, 'fn2_manager') or app.state.fn2_manager is None:
-                return AcknowledgeResponse(status="error", message="FN2Manager not available")
-
-            # Create acknowledge object
-            ack = Acknowledge(ack=True, issue=request.issue, result=request.result)
-
-            # Acknowledge task
-            await app.state.fn2_manager.get_board().ack_task(task_id, ack)
-
-            Trace.log("Web", f"Task {task_id} acknowledged with issue: '{request.issue}'")
-            return AcknowledgeResponse(status="success", message=f'Task {task_id} acknowledged')
-        except Exception as e:
-            Trace.log("Web", f"Error acknowledging task: {str(e)}")
-            return AcknowledgeResponse(status="error", message=f'Error acknowledging task: {str(e)}')
-
-    # Add /api/tasks endpoint for web interface
     @app.get("/api/tasks")
     async def get_tasks():
         """Get all tasks"""
@@ -145,36 +135,159 @@ def setup_routes(app: FastAPI):
             # Check if fn2_manager is available
             if not hasattr(app.state, 'fn2_manager') or app.state.fn2_manager is None:
                 Trace.log("Web", "fn2_manager not available")
-                return {"tasks": [], "stats": {"total": 0, "running": 0, "pending": 0}}
+                return {"tasks": [], "count": 0}
 
-            Trace.log("Web", "fn2_manager available, getting tasks from board")
-            # Get all tasks
             tasks = app.state.fn2_manager.get_board().list_tasks()
-            Trace.log("Web", f"Got {len(tasks)} tasks from board")
+            Trace.log("Web", f"Found {len(tasks)} tasks")
 
-            # Convert tasks to list
             task_list = []
             for task in tasks.values():
-                task_list.append({
+                task_data = {
                     "task_id": task.task_id,
                     "goal": task.goal,
-                    "status": task.status.value if hasattr(task.status, 'value') else str(task.status),
-                    "created_at": task.start_time,
-                    "updated_at": task.end_time if task.end_time else task.start_time,
-                    "parent_id": getattr(task, 'parent_id', None)
-                })
+                    "status": task.status.value,
+                    "submitter": task.submitter,
+                    "try_count": task.try_count,
+                    "start_time": task.start_time,
+                    "end_time": task.end_time
+                }
 
-            # Calculate stats
-            stats = {
-                "total": len(task_list),
-                "running": len([t for t in task_list if t["status"] == "RUNNING"]),
-                "pending": len([t for t in task_list if t["status"] == "ESCL"])
-            }
+                # Add parent_id if available (for derived tasks)
+                fn2 = app.state.fn2_manager.get_fn2(task.task_id)
+                if fn2 and fn2.parent and fn2.parent.task:
+                    task_data["parent_id"] = fn2.parent.task.task_id
 
-            Trace.log("Web", f"Returning {len(task_list)} tasks with stats: {stats}")
-            return {"tasks": task_list, "stats": stats}
+                # Add result if available
+                if task.result:
+                    task_data["result"] = {
+                        "success": task.result.success,
+                        "uncertainty": task.result.uncertainty,
+                        "result": task.result.result
+                    }
+
+                # Add actions if available
+                if task.actions:
+                    task_data["actions"] = []
+                    for action in task.actions:
+                        action_data = {"type": action.type.name}
+                        if hasattr(action, 'request') and action.request:
+                            action_data["request"] = action.request
+                        if hasattr(action, 'operation') and action.operation:
+                            action_data["operation"] = action.operation
+                        if hasattr(action, 'inquery') and action.inquery:
+                            action_data["inquery"] = action.inquery
+                        if hasattr(action, 'result') and action.result:
+                            action_data["result"] = {
+                                "success": action.result.success,
+                                "result": action.result.result,
+                                "observation": action.result.observation,
+                                "track_id": getattr(action.result, 'track_id', None)
+                            }
+                        task_data["actions"].append(action_data)
+
+                task_list.append(task_data)
+
+            return {"tasks": task_list, "count": len(task_list)}
         except Exception as e:
             Trace.log("Web", f"Error getting tasks: {str(e)}")
-            import traceback
-            Trace.log("Web", f"Traceback: {traceback.format_exc()}")
-            return {"tasks": [], "stats": {"total": 0, "running": 0, "pending": 0}}
+            Trace.log("Web", traceback.format_exc())
+            return {"tasks": [], "count": 0, "error": str(e)}
+
+
+    @app.get("/api/task/{task_id}")
+    async def get_task(task_id: str):
+        """Get a specific task"""
+        try:
+            Trace.log("Web", f"Getting task: {task_id}")
+            # Check if fn2_manager is available
+            if not hasattr(app.state, 'fn2_manager') or app.state.fn2_manager is None:
+                Trace.log("Web", "fn2_manager not available")
+                return {"error": "fn2_manager not available"}
+
+            task = app.state.fn2_manager.get_board().get_task(task_id)
+            if not task:
+                Trace.log("Web", f"Task not found: {task_id}")
+                return {"error": "Task not found"}
+
+            task_data = {
+                "task_id": task.task_id,
+                "goal": task.goal,
+                "status": task.status.value,
+                "submitter": task.submitter,
+                "try_count": task.try_count,
+                "start_time": task.start_time,
+                "end_time": task.end_time
+            }
+
+            # Add parent_id if available (for derived tasks)
+            fn2 = app.state.fn2_manager.get_fn2(task.task_id)
+            if fn2 and fn2.parent and fn2.parent.task:
+                task_data["parent_id"] = fn2.parent.task.task_id
+
+            # Add result if available
+            if task.result:
+                task_data["result"] = {
+                    "success": task.result.success,
+                    "uncertainty": task.result.uncertainty,
+                    "result": task.result.result
+                }
+
+            # Add actions if available
+            if task.actions:
+                task_data["actions"] = []
+                for action in task.actions:
+                    action_data = {"type": action.type.name}
+                    if hasattr(action, 'request') and action.request:
+                        action_data["request"] = action.request
+                    if hasattr(action, 'operation') and action.operation:
+                        action_data["operation"] = action.operation
+                    if hasattr(action, 'inquery') and action.inquery:
+                        action_data["inquery"] = action.inquery
+                    if hasattr(action, 'result') and action.result:
+                        action_data["result"] = {
+                            "success": action.result.success,
+                            "result": action.result.result,
+                            "observation": action.result.observation,
+                            "track_id": getattr(action.result, 'track_id', None)
+                        }
+                    task_data["actions"].append(action_data)
+
+            return task_data
+        except Exception as e:
+            Trace.log("Web", f"Error getting task: {str(e)}")
+            Trace.log("Web", traceback.format_exc())
+            return {"error": str(e)}
+
+
+    @app.post("/api/task/{task_id}/acknowledge", response_model=AcknowledgeResponse)
+    async def acknowledge_task(task_id: str, request: TaskAcknowledgeRequest):
+        """Acknowledge a task with user input"""
+        try:
+            Trace.log("Web", f"Acknowledging task: {task_id}")
+            # Check if fn2_manager is available
+            if not hasattr(app.state, 'fn2_manager') or app.state.fn2_manager is None:
+                Trace.log("Web", "fn2_manager not available")
+                return AcknowledgeResponse(status="error", message="fn2_manager not available")
+
+            # Get the task
+            task = app.state.fn2_manager.get_board().get_task(task_id)
+            if not task:
+                Trace.log("Web", f"Task not found: {task_id}")
+                return AcknowledgeResponse(status="error", message="Task not found")
+
+            # Create acknowledge result
+            ack_result = Acknowledge(
+                ack=True,
+                issue=request.issue,
+                result=request.result
+            )
+
+            # Call ack_task on the board
+            await app.state.fn2_manager.get_board().ack_task(task_id, ack_result)
+
+            Trace.log("Web", f"Task acknowledged: {task_id}")
+            return AcknowledgeResponse(status="success")
+        except Exception as e:
+            Trace.log("Web", f"Error acknowledging task: {str(e)}")
+            Trace.log("Web", traceback.format_exc())
+            return AcknowledgeResponse(status="error", message=str(e))

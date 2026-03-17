@@ -136,7 +136,7 @@ class DryRun:
         name = self.scenario.name if self.scenario else "N/A"
         Trace.log("DryRun", f"run ANALYSIS: request '{request}', scenario '{name}'")
         steps = []
-        if runtime["dryrun"]:
+        if runtime["dryrun"]["enabled"]:
             task_def = self._get_current_task_def(request)
             if task_def:
                 Trace.log("DryRun", f"ANALYSIS: step {self.analyze_step}")
@@ -164,7 +164,15 @@ class DryRun:
                 self.analyze_step += 1
             else:
                 # generate steps or data inquery based on random choice
-                if random.choice([True, False]):
+                if runtime["dryrun"]["subtask_escalate"] and random.choice([True, False]):
+                    Trace.log("DryRun", "ANALYSIS: data inquery generated")
+                    steps = [
+                        Action(
+                            type=ActionType.INQUERY,
+                            inquery="what is it?",
+                        ),
+                    ]
+                else:
                     n = random.randint(1, 2)
                     Trace.log("DryRun", f"ANALYSIS: random {n} steps generated")
                     for i in range(n):
@@ -173,14 +181,6 @@ class DryRun:
                             request=request,
                             operation=f"step {i} for '{request}'",
                         ))
-                else:
-                    Trace.log("DryRun", "ANALYSIS: data inquery generated")
-                    steps = [
-                        Action(
-                            type=ActionType.INQUERY,
-                            inquery="what is it?",
-                        ),
-                    ]
             await asyncio.sleep(random.randint(1, 3))
         else:
             Trace.log("DryRun", "ANALYSIS: dryrun not enabled, return empty steps")
@@ -191,7 +191,7 @@ class DryRun:
         execute in dryrun mode, driven by scenario of random generated
         """
         Trace.log("DryRun", f"run EXECUTION: request '{request}'")
-        if runtime["dryrun"]:
+        if runtime["dryrun"]["enabled"]:
             task_def = self._get_current_task_def(request)
             if task_def:
                 Trace.log("DryRun", f"EXECUTION: scenario '{request}' step {self.execute_step}")
@@ -239,7 +239,7 @@ class DryRun:
         Synthesize in dryrun mode, driven by scenario of random generated
         """
         Trace.log("DryRun", f"run SYNTHESIZE: request '{request}'")
-        if runtime["dryrun"]:
+        if runtime["dryrun"]["enabled"]:
             task_def = self._get_current_task_def(request)
             if task_def and task_def.synthesize:
                 Trace.log("DryRun", f"SYNTHESIZE: using scenario config for '{request}'")
@@ -264,7 +264,7 @@ class DryRun:
         """Handle tasks requiring human attention, return whether to continue"""
         Trace.log("DryRun", f"run HUMAN_ATTENTION: task '{task.goal}'")
         prompt = {}
-        if runtime["dryrun"] and self.scenario:
+        if runtime["dryrun"]["enabled"] and self.scenario:
             # Check if there is inquery configuration
             if self.scenario.task_def.inquery and self.scenario.task_def.inquery.get("enable"):
                 prompt = self.scenario.task_def.inquery.get("prompt", [])

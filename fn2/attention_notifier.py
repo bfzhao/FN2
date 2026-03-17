@@ -2,7 +2,8 @@
 Attention notification system for cross-platform mode support
 """
 
-from typing import Callable, List, Dict, Any
+import json
+from typing import Callable, List, Dict, Any, Set
 from datetime import datetime
 from utils.trace import Trace
 from fn2.board import Task, TaskStatus, EscalationType
@@ -35,12 +36,13 @@ class AttentionEvent:
 
 
 class AttentionNotifier:
-    """Cross-platform attention notification system"""
+    """Cross-platform attention notification system with WebSocket support"""
 
     def __init__(self):
         self._handlers: List[Callable[[AttentionEvent], None]] = []
         self._event_queue: List[AttentionEvent] = []
         self._max_queue_size = 100
+        self._websocket_connections: Set = set()
 
     def register_handler(self, handler: Callable[[AttentionEvent], None]):
         """Register a handler for attention events"""
@@ -51,9 +53,19 @@ class AttentionNotifier:
         if handler in self._handlers:
             self._handlers.remove(handler)
 
-    def notify(self, event: AttentionEvent):
-        """Notify all registered handlers"""
-        # Add to queue for web mode
+    def register_websocket(self, websocket):
+        """Register a WebSocket connection for real-time notifications"""
+        self._websocket_connections.add(websocket)
+        Trace.log("AttentionNotifier", f"WebSocket registered. Total connections: {len(self._websocket_connections)}")
+
+    def unregister_websocket(self, websocket):
+        """Unregister a WebSocket connection"""
+        self._websocket_connections.discard(websocket)
+        Trace.log("AttentionNotifier", f"WebSocket unregistered. Total connections: {len(self._websocket_connections)}")
+
+    async def notify(self, event: AttentionEvent):
+        """Notify all registered handlers and WebSocket connections"""
+        # Add to queue for polling fallback
         self._add_to_queue(event)
 
         # Notify all handlers
@@ -63,14 +75,36 @@ class AttentionNotifier:
             except Exception as e:
                 Trace.error("AttentionNotifier", f"Handler error: {e}")
 
+        # Push to all WebSocket connections
+        await self._push_to_websockets(event)
+
+    async def _push_to_websockets(self, event: AttentionEvent):
+        """Push event to all connected WebSocket clients"""
+        if not self._websocket_connections:
+            return
+
+        message = json.dumps(event.to_dict())
+        disconnected = set()
+
+        for websocket in self._websocket_connections:
+            try:
+                await websocket.send_text(message)
+            except Exception as e:
+                Trace.error("AttentionNotifier", f"WebSocket send error: {e}")
+                disconnected.add(websocket)
+
+        # Clean up disconnected websockets
+        for ws in disconnected:
+            self._websocket_connections.discard(ws)
+
     def _add_to_queue(self, event: AttentionEvent):
-        """Add event to queue (for web mode polling)"""
+        """Add event to queue (for polling fallback)"""
         self._event_queue.append(event)
         if len(self._event_queue) > self._max_queue_size:
             self._event_queue.pop(0)
 
     def get_events(self, since: float = None) -> List[Dict[str, Any]]:
-        """Get events since a given timestamp"""
+        """Get events since a given timestamp (for polling fallback)"""
         if since is None:
             events = self._event_queue
         else:
@@ -104,7 +138,34 @@ def create_attention_handler():
                     event_type='escalation',
                     message=message
                 )
-                get_notifier().notify(event)
+                await get_notifier().notify(event)
+
+    return handler
+
+
+def create_task_status_handler():
+    """Create task status change handler for real-time updates"""
+    async def handler(task: Task):
+        # 为所有任务状态变更发送通知，包括新任务创建
+        status_messages = {
+            TaskStatus.INIT: f"Task {task.task_id} created: {task.goal}",
+            TaskStatus.ACPT: f"Task {task.task_id} accepted",
+            TaskStatus.AMBI: f"Task {task.task_id} needs clarification",
+            TaskStatus.ANAL: f"Task {task.task_id} analyzed and planned",
+            TaskStatus.EXED: f"Task {task.task_id} executed",
+            TaskStatus.SYND: f"Task {task.task_id} synthesized",
+            TaskStatus.VRFY: f"Task {task.task_id} verified",
+            TaskStatus.ESCL: f"Task {task.task_id} escalated for attention",
+            TaskStatus.ACK: f"Task {task.task_id} completed"
+        }
+
+        message = status_messages.get(task.status, f"Task {task.task_id} status changed to {task.status.value}")
+        event = AttentionEvent(
+            task,
+            event_type='status_change',
+            message=message
+        )
+        await get_notifier().notify(event)
 
     return handler
 
@@ -115,11 +176,3 @@ def setup_console_handler():
         print(f"\n\nATTENTION\n{event.message}\n\n", flush=True)
 
     get_notifier().register_handler(console_handler)
-
-
-def setup_web_handler():
-    """Setup web handler for daemon mode (events are stored in queue)"""
-    def web_handler(event: AttentionEvent):
-        Trace.log("Web", f"Attention event: {event.event_type} - {event.message}")
-
-    get_notifier().register_handler(web_handler)

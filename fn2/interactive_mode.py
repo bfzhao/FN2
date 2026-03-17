@@ -3,10 +3,10 @@ Interactive mode for FN2 Agent - Console-based user interaction
 """
 
 import asyncio
-from utils.trace import Trace
 from aioconsole import ainput
-from fn2.board import Acknowledge, TaskStatus, ActionType, EscalationType
+from utils.trace import Trace
 from config.settings import runtime
+from fn2.board import Acknowledge, TaskStatus, ActionType, EscalationType
 from fn2.fn2_manager import FN2, FN2Manager
 
 

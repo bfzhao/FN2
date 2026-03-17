@@ -26,10 +26,9 @@ class FN2Manager:
     """
     FN2 manager manages all instances of FN2 framework.
     """
-    _initialized = False
-    _root_fn2 = []
-
     def __init__(self, escalate: callable = None, board: Board = None, dryrun: DryRun = None):
+        self._initialized = False
+        self._root_fn2 = []
         self.board = board if board else Board()
         self.dryrun = dryrun
         self.analyzer = Analyzer(self.board, self.dryrun)

@@ -47,4 +47,4 @@ dist/
 .trae/
 
 # Configuration files
-config.py
+config/settings.py

@@ -8,91 +8,74 @@ from config.settings import runtime
 def daemonize():
     """
     Cross-platform daemonize function.
-    Works on Unix/Linux/macOS using fork(), and Windows using subprocess.
+    Uses subprocess to spawn a detached background process.
     """
     # Check if we're already in daemon mode (to prevent recursive spawning)
     if os.environ.get('FN2_DAEMON_MODE') == '1':
-        print("Already in daemon mode, returning")
         return
 
     print(f"Starting daemonization process, PID: {os.getpid()}")
 
-    # For Unix/Linux/macOS, use fork()
-    if platform.system() != 'Windows':
-        # First fork
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # Parent process
-                print(f"Daemon started with PID: {pid}")
-                sys.exit(0)
-        except OSError as e:
-            print(f"First fork failed: {e}")
-            sys.exit(1)
+    # Get absolute path of the script
+    script_path = os.path.abspath(sys.argv[0])
+    
+    # Build arguments for the daemon process
+    args = [arg for arg in sys.argv[1:] if arg != '--daemon']
+    
+    # Add --web argument if needed
+    if runtime.get('web', False) and '--web' not in args:
+        args.append('--web')
+    
+    # Add port and host arguments from runtime config only if not already in args
+    if runtime.get('port') is not None and '--port' not in args:
+        args.extend(['--port', str(runtime['port'])])
+    if runtime.get('host') is not None and '--host' not in args:
+        args.extend(['--host', runtime['host']])
 
-        # Decouple from parent environment
-        os.setsid()
-        os.chdir('/')
-        os.umask(0)
+    # Set up environment
+    env = os.environ.copy()
+    env['FN2_DAEMON_MODE'] = '1'
 
-        # Second fork
-        try:
-            pid = os.fork()
-            if pid > 0:
-                # First child process
-                sys.exit(0)
-        except OSError as e:
-            print(f"Second fork failed: {e}")
-            sys.exit(1)
+    # Get the script's directory for cwd
+    cwd = os.path.dirname(script_path)
+    
+    # Create log files for daemon stdout/stderr
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    log_dir = os.path.join(project_dir, 'log')
+    os.makedirs(log_dir, exist_ok=True)
+    stdout_log = os.path.join(log_dir, 'daemon_stdout.log')
+    stderr_log = os.path.join(log_dir, 'daemon_stderr.log')
 
-        # Redirect standard file descriptors
-        sys.stdout.flush()
-        sys.stderr.flush()
-
-        # Close all standard file descriptors
-        si = open(os.devnull, 'r')
-        so = open(os.devnull, 'a+')
-        se = open(os.devnull, 'a+')
-
-        os.dup2(si.fileno(), sys.stdin.fileno())
-        os.dup2(so.fileno(), sys.stdout.fileno())
-        os.dup2(se.fileno(), sys.stderr.fileno())
-
-        # Set daemon mode environment variable
-        os.environ['FN2_DAEMON_MODE'] = '1'
-
-        print("Daemonization completed successfully")
-        # The daemon process continues to run from here
-        return
-    else:
-        # For Windows, use subprocess
-        script_path = sys.argv[0]
-        args = [arg for arg in sys.argv[1:] if arg != '--daemon']
-        # Add --web argument if needed
-        if runtime.get('web', False) and '--web' not in args:
-            args.append('--web')
-
-        env = os.environ.copy()
-        env['FN2_DAEMON_MODE'] = '1'
-
-        # Use pythonw.exe if available to avoid console window
+    if platform.system() == 'Windows':
+        # Windows: use pythonw.exe if available
         python_exe = sys.executable.replace('python.exe', 'pythonw.exe')
         if not os.path.exists(python_exe):
             python_exe = sys.executable
-
-        # Set cwd to the script's directory to ensure relative paths work correctly
-        cwd = os.path.dirname(os.path.abspath(script_path))
-
+        
         # Start the daemon process
-        process = subprocess.Popen(
-            [python_exe, script_path] + args,
-            env=env,
-            cwd=cwd,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL,
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
-        )
-
+        with open(stdout_log, 'a') as stdout_f, open(stderr_log, 'a') as stderr_f:
+            process = subprocess.Popen(
+                [python_exe, script_path] + args,
+                env=env,
+                cwd=cwd,
+                stdout=stdout_f,
+                stderr=stderr_f,
+                stdin=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+            )
         print(f"Daemon started with PID: {process.pid}")
-        sys.exit(0)
+    else:
+        # Unix/Linux/macOS: use double-fork via subprocess with start_new_session
+        with open(stdout_log, 'a') as stdout_f, open(stderr_log, 'a') as stderr_f:
+            process = subprocess.Popen(
+                [sys.executable, script_path] + args,
+                env=env,
+                cwd=cwd,
+                stdout=stdout_f,
+                stderr=stderr_f,
+                stdin=subprocess.DEVNULL,
+                start_new_session=True
+            )
+        print(f"Daemon started with PID: {process.pid}")
+    
+    sys.exit(0)

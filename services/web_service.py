@@ -1,9 +1,8 @@
+import os
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-import os
 from fn2.fn2_manager import FN2Manager
-
 from api.routes import setup_routes
 
 
@@ -33,15 +32,22 @@ def setup_web_service(app: FastAPI, fn2_manager: FN2Manager):
     else:
         print("Static directory does not exist, skipping mount")
 
-    # Setup routes
-    setup_routes(app)
-
     # Root route
     @app.get("/")
     async def root():
+        """Root route handler"""
         if os.path.exists(index_path):
             return FileResponse(index_path)
         else:
             return {"message": "FN2 Agent Web Interface"}
+
+    # Test route
+    @app.get("/test")
+    async def test():
+        return {"message": "Test route works"}
+
+
+    # API routes
+    setup_routes(app)
 
     return app

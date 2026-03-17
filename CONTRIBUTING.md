@@ -85,7 +85,7 @@ uv pip install -r requirements.txt
 python main.py
 ```
 
-- 关闭 dryrun：`config.py` 中 `runtime["dryrun"] = False`
+- 关闭 dryrun：`config.py` 中 `runtime["dryrun"]["enabled"] = False`
 - 启用 trace：`runtime["trace"]` 各组件设为 True
 
 ## Code Style & Conventions

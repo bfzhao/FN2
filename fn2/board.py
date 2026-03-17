@@ -27,7 +27,7 @@ class Event(Enum):
 
 class TaskStatus(Enum):
     """Enumeration of task statuses tracked by the Board."""
-    INIT = "initalized"
+    INIT = "initialized"
     ACPT = "accepted"
     AMBI = "ambiguous"
     ANAL = "analyzed"
@@ -245,9 +245,16 @@ class Board:
                     "Board",
                     f"Notify event: {event.value} to callback: {callback.__name__}"
                 )
-                if self._tg is None:
-                    raise RuntimeError("Board TaskGroup not running")
-                self._tg.create_task(callback(task))
+                async def safe_callback(cb, t):
+                    try:
+                        await cb(t)
+                    except Exception as e:
+                        Trace.error("Board", f"Error in callback {cb.__name__}: {e}")
+
+                if self._tg is not None:
+                    self._tg.create_task(safe_callback(callback, task))
+                else:
+                    asyncio.create_task(safe_callback(callback, task))
         else:
             Trace.log(
                 "Task",

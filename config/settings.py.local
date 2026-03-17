@@ -18,7 +18,10 @@ skills = {
 }
 
 runtime = {
-    "dryrun": False,
+    "dryrun": {
+        "enabled": False,
+        "subtask_escalate": False,
+    },
     "success": 0.8,
     "trace": {
         "main": True,

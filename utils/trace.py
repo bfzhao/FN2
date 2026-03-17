@@ -46,8 +46,9 @@ def init_log_file():
         LOG_FILE = open(log_file_path, 'a', encoding='utf-8')
         atexit.register(close_log_file)
 
-# Initialize log file on module load
-init_log_file()
+# Initialize log file on module load (only if not in daemon mode)
+if not os.environ.get('FN2_DAEMON_MODE') == '1':
+    init_log_file()
 
 class Trace:
     """
